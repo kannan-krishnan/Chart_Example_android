@@ -1,4 +1,4 @@
-# Chart_Example_android
+# Chart Example Android
 Sample Chart Graph Without 3rd Party Libraries Android Kotlin
 
 Create layout file
