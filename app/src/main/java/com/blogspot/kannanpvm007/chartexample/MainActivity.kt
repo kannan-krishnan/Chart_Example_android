@@ -1,20 +1,29 @@
 package com.blogspot.kannanpvm007.chartexample
 
+import android.Manifest
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
 import android.util.Log
 import android.view.*
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.PopupWindow
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(),ScreenshotDetector.BackPressedListener {
 
     var firstst=90f
     var sec=50f
@@ -22,9 +31,22 @@ class MainActivity : AppCompatActivity() {
     var foure=70f
     var five=60f
     private lateinit var chart:LineChartView
+
+
+    private lateinit var screenshotDetector: ScreenshotDetector
+    private lateinit var image: ImageView
+    private lateinit var ltv: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        screenshotDetector = ScreenshotDetector(baseContext)
+
+//        getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+
+        screenshotDetector.backPressedListener=this
+        image= findViewById(R.id.image)
+        ltv= findViewById(R.id.ltv)
         chart = findViewById<LineChartView>(R.id.chart)
         setData()
         findViewById<Button>(R.id.reset).setOnClickListener {
@@ -58,6 +80,25 @@ class MainActivity : AppCompatActivity() {
 
             setData()
         }
+
+        findViewById<Button>(R.id.next).setOnClickListener {
+            startActivity(Intent(this,MainActivity2::class.java))
+        }
+        val graphView = findViewById<StockGraphView>(R.id.graphView)
+        graphView.setValues(arrayListOf(100f, 120f, 110f, 130f, 140f))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        detectScreenshots()
+
+//        screenshotObserver.register()
+    }
+
+    override fun onPause() {
+        super.onPause()
+//        screenshotObserver.unregister()
+        screenshotDetector.stop()
     }
 
     private fun setData(){
@@ -65,8 +106,51 @@ class MainActivity : AppCompatActivity() {
         chart.setHorizontalLine(50f,"50%", Color.RED)
     }
 
+    private fun detectScreenshots() {
+        if (haveStoragePermission()) {
+            screenshotDetector.start()
+        } else {
+            requestPermission()
+        }
+    }
+    private fun haveStoragePermission() =
+        ContextCompat.checkSelfPermission(
+            this,
+             Manifest.permission.READ_EXTERNAL_STORAGE
+        ) == PackageManager.PERMISSION_GRANTED
 
+    private fun requestPermission() {
+        if (!haveStoragePermission()) {
+            val permissions = arrayOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            )
+            ActivityCompat.requestPermissions(this, permissions,102)
+        }
+    }
 
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        when (requestCode) {
+            102 -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    detectScreenshots()
+                }
+                return
+            }
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+
+    override fun onItemClick(path: String) {
+
+        Log.d("TAG", "onItemClick: ------------------------->$path")
+        image.setImageBitmap(BitmapFactory.decodeFile(path))
+        ltv.text=path
+
+    }
 }
 /**chart class*/
 class LineChartView(context: Context, attrs: AttributeSet) : View(context, attrs) {
@@ -265,4 +349,93 @@ class LineChartView(context: Context, attrs: AttributeSet) : View(context, attrs
         }
     }
 
+}
+
+class StockGraphView(context: Context?, attrs: AttributeSet?) : View(context,attrs) {
+//    private val values = floatArrayOf(100f, 120f, 110f, 130f, 140f)
+private val values = mutableListOf<Float>()
+    
+    private val paint = Paint()
+
+    init {
+        paint.color = Color.BLUE
+        paint.strokeWidth = 2f
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val width = canvas.width
+        val height = canvas.height
+
+        // Draw horizontal and vertical axis lines
+        canvas.drawLine(0f, height.toFloat(), width.toFloat(), height.toFloat(), paint)
+        canvas.drawLine(0f, 0f, 0f, height.toFloat(), paint)
+
+        // Calculate x and y scale factors
+        val xScale = width / (values.size - 1).toFloat()
+        val yScale = height / 140f
+
+        canvas?.let {
+            // Draw the chart
+            // ...
+
+            // Draw the title
+            val title = "Stock Price History"
+            paint.textSize = 24f
+            val titleWidth = paint.measureText(title)
+            val titleX = (width - titleWidth) / 2f
+            val titleY = 48f
+            canvas.drawText(title, titleX, titleY, paint)
+        }
+
+        canvas?.let {
+            // Draw the chart
+            // ...
+
+            // Draw the x-axis label
+            paint.textSize = 18f
+            val xAxisLabel = "Time"
+            val xAxisLabelWidth = paint.measureText(xAxisLabel)
+            val xAxisLabelX = (width - xAxisLabelWidth) / 2f
+            val xAxisLabelY = height - 16f
+            canvas.drawText(xAxisLabel, xAxisLabelX, xAxisLabelY, paint)
+
+            // Draw the y-axis label
+            val yAxisLabel = "Price"
+            paint.textSize = 18f
+            val yAxisLabelWidth = paint.measureText(yAxisLabel)
+            val yAxisLabelX = 8f
+            val yAxisLabelY = (height + yAxisLabelWidth) / 2f
+            canvas.save()
+            canvas.rotate(-90f, yAxisLabelX, yAxisLabelY)
+            canvas.drawText(yAxisLabel, yAxisLabelX, yAxisLabelY, paint)
+            canvas.restore()
+        }
+
+
+        // Draw the data points and lines
+        for (i in values.indices) {
+            val x = i * xScale
+            val y = height - values[i] * yScale
+            canvas.drawCircle(x, y, 4f, paint)
+            if (i > 0) {
+                val prevX = (i - 1) * xScale
+                val prevY = height - values[i - 1] * yScale
+                canvas.drawLine(prevX, prevY, x, y, paint)
+            }
+        }
+
+
+
+    }
+    fun setValues(values: List<Float>) {
+        this.values.clear()
+        this.values.addAll(values)
+        invalidate()
+    }
+
+    fun clear() {
+        this.values.clear()
+        invalidate()
+    }
 }
